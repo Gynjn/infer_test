@@ -178,12 +178,10 @@ if __name__ == '__main__':
     device = "cuda:0"   
 
     yaml_real = "/home/jinnnn/etriworkspace/pipe_param_real.yaml"
-    yaml_anime = "/home/jinnnn/etriworkspace/pipe_param_anime.yaml"
     yaml_webtoon = "/home/jinnnn/etriworkspace/pipe_param_webtoon.yaml"
     infer_config = "/home/jinnnn/etriworkspace/pipe_config.yaml"
 
     dict_pipe_real = utils.load_param(yaml_real)
-    dict_pipe_anime = utils.load_param(yaml_anime)
     dict_pipe_webtoon = utils.load_param(yaml_webtoon)
     dict_infer = utils.load_param(infer_config)
 
@@ -202,18 +200,22 @@ if __name__ == '__main__':
 
 
     #%% Initiate Pipelines
-    pipe_i2i_real = initiate_pipe(controlnet, device, **dict_pipe_real["init_pipe"])
-    pipe_i2i_anime = initiate_pipe(controlnet, device, **dict_pipe_anime["init_pipe"])
+    pipe_i2i_real_to_water = initiate_pipe(controlnet, device, **dict_pipe_real["init_pipe"])
+    pipe_i2i_real_to_water = load_lora(pipe_i2i_real_to_water, ["/hdd/jinnnn/Colorwater.safetensors", 1])
+    pipe_i2i_real_to_oil = initiate_pipe(controlnet, device, **dict_pipe_real["init_pipe"])
+    pipe_i2i_real_to_oil = load_lora(pipe_i2i_real_to_oil, ["/hdd/jinnnn/feop91.safetensors", 1.2])
+    pipe_i2i_real_to_ink = initiate_pipe(controlnet, device, **dict_pipe_real["init_pipe"])
+    pipe_i2i_real_to_ink = load_lora(pipe_i2i_real_to_ink, ["/hdd/jinnnn/inkbrush12.safetensors", 0.9])    
     pipe_i2i_webtoon = initiate_pipe(controlnet, device, webtoon=True, **dict_pipe_webtoon["init_pipe"])
 
     #%% 
-    # list_pipe_i2i = [None, pipe_i2i_oil, pipe_i2i_watercolor, pipe_i2i_ink, pipe_i2i_webtoon]
-    list_pipe_i2i = [pipe_i2i_real, pipe_i2i_anime, pipe_i2i_webtoon]
+    list_pipe_i2i = [pipe_i2i_real_to_water, pipe_i2i_real_to_oil, pipe_i2i_real_to_ink, pipe_i2i_webtoon]
 
-    dict_from_type_idx = {
-        "real" : 0,
-        "anime" : 1,
-        "webtoon" : 2
+    dict_idx = {
+        "real_to_watercolor" : 0,
+        "real_to_oil" : 1,
+        "real_to_ink" : 2,
+        "real_to_webtoon" : 3
     }
 
     upsampler_r = init('R')
@@ -235,11 +237,9 @@ if __name__ == '__main__':
         print("From " + from_type + " to " + style + '!')
         if style == "webtoon":
             from_type = "webtoon"
-        from_type_idx = dict_from_type_idx[from_type]
-        pipe_i2i = list_pipe_i2i[from_type_idx]
-        if from_type_idx != 2:
-            dict_lora = dict_infer[running_type]["lora_info"]
-            pipe_i2i = load_lora(pipe_i2i, dict_lora)  
+        type_idx = dict_idx[running_type]
+        pipe_i2i = list_pipe_i2i[type_idx]
+
         positive_prompt = dict_infer[running_type]["prompt"]
         compel_proc = Compel(tokenizer=pipe_i2i.tokenizer, text_encoder=pipe_i2i.text_encoder)
 
@@ -267,14 +267,12 @@ if __name__ == '__main__':
         image_to_SR = generated[int(image_num)-1]
         image_to_SR_array = np.array(image_to_SR)
         image_to_SR_array_BGR = cv2.cvtColor(image_to_SR_array, cv2.COLOR_RGB2BGR)
-        if from_type_idx == 0:
-            SR_output, _ = upsampler_r.enhance(image_to_SR_array_BGR, outscale=2)
-        else:
+        if dict_idx == 3:
             SR_output, _ = upsampler_c.enhance(image_to_SR_array_BGR, outscale=2)
+        else:
+            SR_output, _ = upsampler_r.enhance(image_to_SR_array_BGR, outscale=2)
         cv2.imwrite(output_path + running_type + "_" + os.path.splitext(user_input)[0] + "_SR" + ".png", SR_output)
         print('Done generation!')
-        if from_type_idx != 2:
-            pipe_i2i = pipe_i2i.unload_lora_weights()
 
         flag_quit = input("\n\nq to quit / enter to continue : ")
         list_quit = ['q', "quit"]
