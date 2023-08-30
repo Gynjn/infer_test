@@ -19,7 +19,6 @@ import time
 from realesrgan import RealESRGANer
 from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 import numpy as np
-sdsd
 
 
 def load_lora(pipe, dict_lora):
